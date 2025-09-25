@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import fs from 'fs';
 import readline from 'readline';
 import { google } from 'googleapis';
@@ -8,6 +9,7 @@ const SCOPES = ['https://www.googleapis.com/auth/youtube.force-ssl'];
 const TOKEN_PATH = 'token.json';
 const VIDEO_ID = 'g05DWYZUPv4'; // <-- change to your video ID
 const OUTPUT_FILE = 'media_data.json';
+const POLLING_INTERVAL = 60 * 1000; // 60 seconds
 
 const oAuth2Client = new google.auth.OAuth2(
   process.env.GOOGLE_CLIENT_ID,
@@ -20,8 +22,8 @@ async function main() {
   if (fs.existsSync(TOKEN_PATH)) {
     const token = JSON.parse(fs.readFileSync(TOKEN_PATH));
     oAuth2Client.setCredentials(token);
-    console.log('Token loaded from file.');
-    await fetchMediaData();
+    console.log('✅ Token loaded from file.');
+    startPolling();
   } else {
     await getAccessToken(oAuth2Client);
   }
@@ -47,12 +49,19 @@ async function getAccessToken(oAuth2Client) {
       const { tokens } = await oAuth2Client.getToken(code);
       oAuth2Client.setCredentials(tokens);
       fs.writeFileSync(TOKEN_PATH, JSON.stringify(tokens, null, 2));
-      console.log('Token stored to', TOKEN_PATH);
-      await fetchMediaData();
+      console.log('✅ Token stored to', TOKEN_PATH);
+      startPolling();
     } catch (err) {
-      console.error('Error retrieving access token', err);
+      console.error('❌ Error retrieving access token', err);
     }
   });
+}
+
+// ----------------- POLLING -----------------
+function startPolling() {
+  console.log('⏱ Starting polling for new comments...');
+  fetchMediaData(); // first fetch immediately
+  setInterval(fetchMediaData, POLLING_INTERVAL); // repeat every interval
 }
 
 // ----------------- FETCH MEDIA DATA -----------------
@@ -109,11 +118,9 @@ async function fetchMediaData() {
     // 3. Save structured data
     const mediaData = { video: videoData, comments };
     fs.writeFileSync(OUTPUT_FILE, JSON.stringify(mediaData, null, 2));
-    console.log(
-      `✅ Video + ${comments.length} comments fetched. Saved to ${OUTPUT_FILE}`
-    );
+    console.log(`✅ Video + ${comments.length} comments fetched. Saved to ${OUTPUT_FILE}`);
   } catch (err) {
-    console.error('Error fetching media data:', err);
+    console.error('❌ Error fetching media data:', err);
   }
 }
 
