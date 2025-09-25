@@ -22,6 +22,19 @@ async function main() {
   if (fs.existsSync(TOKEN_PATH)) {
     const token = JSON.parse(fs.readFileSync(TOKEN_PATH));
     oAuth2Client.setCredentials(token);
+
+    // 🔄 listen for automatic refresh
+    oAuth2Client.on('tokens', (tokens) => {
+      if (tokens.refresh_token) {
+        token.refresh_token = tokens.refresh_token; // keep refresh token
+      }
+      if (tokens.access_token) {
+        token.access_token = tokens.access_token;
+      }
+      fs.writeFileSync(TOKEN_PATH, JSON.stringify(token, null, 2));
+      console.log('♻️ Token refreshed & saved.');
+    });
+
     console.log('✅ Token loaded from file.');
     startPolling();
   } else {
@@ -33,6 +46,7 @@ async function main() {
 async function getAccessToken(oAuth2Client) {
   const authUrl = oAuth2Client.generateAuthUrl({
     access_type: 'offline',
+    prompt: 'consent',
     scope: SCOPES,
   });
   console.log('Authorize this app by visiting this url:', authUrl);
@@ -118,8 +132,11 @@ async function fetchMediaData() {
     // 3. Save structured data
     const mediaData = { video: videoData, comments };
     fs.writeFileSync(OUTPUT_FILE, JSON.stringify(mediaData, null, 2));
-    console.log(`✅ Video + ${comments.length} comments fetched. Saved to ${OUTPUT_FILE}`);
+    console.log(
+      `✅ Video + ${comments.length} comments fetched. Saved to ${OUTPUT_FILE}`
+    );
   } catch (err) {
+    // ❌ Access token expire hole auto refresh trigger hobe
     console.error('❌ Error fetching media data:', err);
   }
 }
